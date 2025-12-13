@@ -1,0 +1,292 @@
+# make_docde_ppt.py
+# Tạo PowerPoint 15 slide giới thiệu “Đọc Dễ – Hỗ trợ trẻ rối loạn đọc”
+# pip install python-pptx
+
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.enum.text import PP_ALIGN, MSO_AUTO_SIZE
+from pptx.dml.color import RGBColor
+from pptx.enum.dml import MSO_THEME_COLOR
+from pptx.enum.shapes import MSO_SHAPE
+
+# Bảng màu
+INK = RGBColor(0x37, 0x41, 0x51)      # #374151
+ACC = RGBColor(0x0e, 0xa5, 0xa0)      # #0ea5a0
+MUT = RGBColor(0x51, 0x62, 0x6f)      # #51626f
+PAPER = RGBColor(0xFF, 0xFF, 0xFF)    # #ffffff
+PILL = RGBColor(0xF4, 0xF6, 0xFB)     # #f4f6fb
+WARN = RGBColor(0xF5, 0x9E, 0x0B)     # #f59e0b
+GOOD = RGBColor(0x16, 0xA3, 0x4A)     # #16a34a
+
+prs = Presentation()
+# 16:9
+prs.slide_width = Inches(13.333)
+prs.slide_height = Inches(7.5)
+
+def set_title(tx, text, color=INK, size=42, bold=True):
+    tx.text = text
+    for p in tx.text_frame.paragraphs:
+        for r in p.runs:
+            r.font.bold = bold
+            r.font.size = Pt(size)
+            r.font.color.rgb = color
+
+def add_footer(slide, text="Đọc Dễ – ddh14.github.io/App_for_dyslexia_children/"):
+    left = Inches(0.3)
+    top = prs.slide_height - Inches(0.5)
+    width = prs.slide_width - Inches(0.6)
+    height = Inches(0.3)
+    box = slide.shapes.add_textbox(left, top, width, height)
+    tf = box.text_frame
+    tf.clear()
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = text
+    run.font.size = Pt(11)
+    run.font.color.rgb = MUT
+
+def add_header_bar(slide, color=ACC):
+    # thanh mảnh phía trên
+    slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, Inches(0.18)).fill.solid()
+    shape = slide.shapes[-1]
+    shape.fill.fore_color.rgb = color
+    shape.line.fill.background()
+
+def add_pill(slide, left, top, text, fg=INK, bg=PILL):
+    box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, Inches(2.2), Inches(0.6))
+    box.fill.solid(); box.fill.fore_color.rgb = bg
+    box.line.color.rgb = RGBColor(0xE6,0xE8,0xEE)
+    tx = box.text_frame; tx.clear()
+    p = tx.paragraphs[0]; r = p.add_run(); r.text = text
+    r.font.size = Pt(14); r.font.color.rgb = fg
+    tx.margin_left = Inches(0.2); tx.margin_right = Inches(0.2); tx.margin_top = Inches(0.05)
+
+def add_bullets(slide, items, left=Inches(0.8), top=Inches(2.0), width=None, height=None, size=24):
+    if width is None: width = prs.slide_width - Inches(1.6)
+    if height is None: height = prs.slide_height - top - Inches(1.3)
+    tb = slide.shapes.add_textbox(left, top, width, height)
+    tf = tb.text_frame; tf.word_wrap = True; tf.auto_size = MSO_AUTO_SIZE.NONE
+    tf.clear()
+    for i, txt in enumerate(items):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.text = txt
+        p.level = 0
+        p.font.size = Pt(size)
+        p.font.color.rgb = INK
+
+def add_illus_block(slide, emoji="📊", caption="Minh hoạ"):
+    # khối illus bên phải
+    w = Inches(4.2); h = Inches(3.2)
+    left = prs.slide_width - w - Inches(0.6)
+    top = Inches(2.0)
+    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, w, h)
+    shape.fill.solid(); shape.fill.fore_color.rgb = RGBColor(0xF8,0xFA,0xFC)
+    shape.line.color.rgb = RGBColor(0xE6,0xE8,0xEE)
+    # emoji
+    box = slide.shapes.add_textbox(left+Inches(0.2), top+Inches(0.4), w-Inches(0.4), h-Inches(1.0))
+    tf = box.text_frame; tf.clear()
+    p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+    r = p.add_run(); r.text = emoji; r.font.size = Pt(80)
+    # caption
+    cap = slide.shapes.add_textbox(left, top+h-Inches(0.7), w, Inches(0.6)).text_frame
+    cap.text = caption
+    for r0 in cap.paragraphs[0].runs:
+        r0.font.size = Pt(14); r0.font.color.rgb = MUT; cap.paragraphs[0].alignment = PP_ALIGN.CENTER
+
+def add_title_content_slide(title, bullets, emoji="🧩", cap="Minh hoạ"):
+    layout = prs.slide_layouts[5]  # TITLE_ONLY
+    slide = prs.slides.add_slide(layout)
+    add_header_bar(slide)
+    set_title(slide.shapes.title.text_frame, title, size=34)
+    add_bullets(slide, bullets)
+    add_illus_block(slide, emoji=emoji, caption=cap)
+    add_footer(slide)
+    return slide
+
+# Slide 1 – Bìa
+slide = prs.slides.add_slide(prs.slide_layouts[6])  # blank
+add_header_bar(slide)
+# Khối tiêu đề
+title_box = slide.shapes.add_textbox(Inches(0.8), Inches(1.5), prs.slide_width - Inches(1.6), Inches(1.6))
+tf = title_box.text_frame; tf.clear()
+p = tf.paragraphs[0]; r = p.add_run(); r.text = "Đọc Dễ – Ứng dụng hỗ trợ trẻ rối loạn đọc"
+r.font.size = Pt(44); r.font.bold = True; r.font.color.rgb = INK
+sub = slide.shapes.add_textbox(Inches(0.8), Inches(3.0), Inches(8.8), Inches(1.0)).text_frame
+sub.text = "Structured Literacy • PA • Cards (SRS) • Luyện đọc • Dashboard"
+for rr in sub.paragraphs[0].runs: rr.font.size = Pt(22); rr.font.color.rgb = MUT
+# pills
+add_pill(slide, Inches(0.8), Inches(3.8), "Voice UI 🔊", fg=INK)
+add_pill(slide, Inches(3.1), Inches(3.8), "TTS & Ghi âm", fg=INK)
+add_pill(slide, Inches(5.4), Inches(3.8), "Offline‑first", fg=INK)
+# link
+link = slide.shapes.add_textbox(Inches(0.8), Inches(4.6), Inches(9.5), Inches(0.6)).text_frame
+link.text = "Demo: ddh14.github.io/App_for_dyslexia_children/"
+for r in link.paragraphs[0].runs: r.font.size = Pt(16); r.font.color.rgb = ACC
+# illus
+add_illus_block(slide, emoji="📖🔊🃏", caption="PA • Cards • Reading")
+add_footer(slide)
+
+# Slide 2 – Vấn đề & bối cảnh
+add_title_content_slide(
+    "Vấn đề & bối cảnh",
+    [
+        "Dyslexia ước tính 5–10% HS: khó nhận âm–chữ, thanh điệu, tốc độ đọc.",
+        "Thiếu công cụ tiếng Việt; phụ huynh khó luyện đều mỗi ngày.",
+        "Cần giải pháp: ngắn – đều – đúng nhóm lỗi; có dữ liệu tiến bộ."
+    ],
+    emoji="🧒📚", cap="Bối cảnh lớp học"
+)
+
+# Slide 3 – Mục tiêu của Đọc Dễ
+add_title_content_slide(
+    "Mục tiêu của Đọc Dễ",
+    [
+        "Tự động hoá nhận diện–phát âm tiếng Việt có dấu.",
+        "Giảm lỗi chính tả theo ngữ cảnh (s/x; ch/tr; ng/ngh; g/gh; c/k/qu; n/l…).",
+        "Tăng WCPM và hiểu nội dung khi đọc đoạn.",
+        "Theo dõi tiến bộ; đề xuất nhóm ưu tiên theo dữ liệu."
+    ],
+    emoji="🎯📈", cap="Đích đến"
+)
+
+# Slide 4 – Cách tiếp cận sư phạm
+add_title_content_slide(
+    "Cách tiếp cận sư phạm",
+    [
+        "Structured Literacy + đa giác quan (nghe–nhìn–nhấn).",
+        "Chuỗi luyện: PA → Cards (SRS) → Luyện đọc/hiểu.",
+        "Thời lượng: 4–7 phút/ngày; đều đặn hơn là dài.",
+        "Quy trình: Cue → Nghe/nhìn → Thực hiện → Phản hồi → Củng cố."
+    ],
+    emoji="➡️", cap="Quy trình 5 bước"
+)
+
+# Slide 5 – Kiến trúc & công nghệ
+add_title_content_slide(
+    "Kiến trúc & công nghệ",
+    [
+        "PWA chạy offline; Web/Android/iOS; đóng gói Cordova/Capacitor.",
+        "TTS vi‑VN; Voice UI; ghi âm/Echo; Spotlight/Pacer.",
+        "Dashboard • CSV/PDF; đồng bộ Google Drive (opt‑in).",
+        "Quyền riêng tư: mã ẩn danh; không tự gửi ghi âm."
+    ],
+    emoji="🧱⚙️", cap="Kiến trúc"
+)
+
+# Slide 6 – PA: Segment
+add_title_content_slide(
+    "Mô‑đun PA – Segment (onset–rime/cụm phụ âm)",
+    [
+        "Ghép mảnh: “tr–anh → tranh”, “gh–é → ghé”, “qu–ả → quả”.",
+        "Hiểu quy tắc c/k/qu; ng/ngh; g/gh theo nguyên âm sau.",
+        "Phản hồi tức thì: nháy đúng, rung sai; gợi ý ngắn theo mẫu chữ."
+    ],
+    emoji="🧩", cap="Ghép mảnh"
+)
+
+# Slide 7 – PA: Tone & Pair
+add_title_content_slide(
+    "Mô‑đun PA – Tone & Pair",
+    [
+        "Tone: cùng 1 base (me/cho/que/…) với 6 thanh; mã màu nhất quán.",
+        "Pair: cặp tối thiểu theo nhóm lỗi (s/x, ch/tr, ng/ngh, g/gh, c/k/qu, n/l, d/gi/r).",
+        "Gợi ý tầng bậc: 🐢 nghe chậm → manh mối → so sánh đối chiếu."
+    ],
+    emoji="🎵⚖️", cap="Thanh điệu & cặp tối thiểu"
+)
+
+# Slide 8 – Cards (SRS)
+add_title_content_slide(
+    "Thẻ từ (Cards) – Spaced Repetition",
+    [
+        "Đơn vị: 1 tiếng có dấu + emoji gợi nghĩa; tô màu theo 6 thanh.",
+        "SM‑2 rút gọn: Q=5/3/1 → khoảng cách 1–60 ngày; “đã vững” khi I≥14d.",
+        "Vòng 60s: tăng nhịp, sticker/điểm; có thể không ảnh hưởng lịch ôn.",
+        "Lọc theo tag; gợi ý tag yếu theo dữ liệu 7 ngày."
+    ],
+    emoji="🃏", cap="Ôn đúng lúc"
+)
+
+# Slide 9 – Luyện đọc 4 bước
+add_title_content_slide(
+    "Luyện đọc – 4 bước",
+    [
+        "B1 Chọn cấp/bài; B2 Bắt đầu/Kết thúc (WCPM, % đúng).",
+        "B3 Đánh dấu lỗi (tone, s/x, ch/tr, bỏ/thêm âm…).",
+        "B4 Câu hỏi hiểu nội dung; xem kết quả.",
+        "Công cụ: Pacer/Spotlight; Echo 1 câu."
+    ],
+    emoji="📖⏱️", cap="Flow 1→4"
+)
+
+# Slide 10 – Đánh giá nhanh
+add_title_content_slide(
+    "Đánh giá nhanh (7–10 phút)",
+    [
+        "PA – cùng vần; RAN – 50 số; Decoding – giả từ; Sight – từ chức năng.",
+        "Ghi vào nhật ký; không phải chẩn đoán y khoa (IDA).",
+        "Dùng để định hướng luyện tập tuần."
+    ],
+    emoji="🧪", cap="Screeners"
+)
+
+# Slide 11 – Trò chơi âm vị
+add_title_content_slide(
+    "Trò chơi âm vị",
+    [
+        "Chế độ: theo thanh / theo tag; bóng đúng có vòng sáng.",
+        "Nghe mẫu, chạm chọn; điểm–thời gian–mạng rõ ràng.",
+        "Tăng động lực, củng cố phân biệt qua đa giác quan."
+    ],
+    emoji="🎈🕹️", cap="Vui – đúng – có mục tiêu"
+)
+
+# Slide 12 – Dashboard & Báo cáo
+add_title_content_slide(
+    "Dashboard & Báo cáo",
+    [
+        "WCPM, % đúng, tổng lỗi theo loại, thời lượng luyện.",
+        "PA/RAN/Decoding/Sight theo thời gian.",
+        "Xuất CSV/PDF để trao đổi với GV/SLP.",
+        "Đồng bộ Google Drive (opt‑in)."
+    ],
+    emoji="📊", cap="Theo dõi tiến bộ"
+)
+
+# Slide 13 – A11y & Quyền riêng tư
+add_title_content_slide(
+    "Khả năng truy cập & Quyền riêng tư",
+    [
+        "Dễ đọc: Lexend/OpenDyslexic; giãn dòng/chữ; nút ≥ 44px.",
+        "Tôn trọng “giảm chuyển động”; chặn lặp giọng nói 1.2s.",
+        "Ẩn danh; không tự gửi ghi âm/ảnh; đồng thuận rõ ràng.",
+        "Web • Android • iOS (TTS vi‑VN; “Kích hoạt âm thanh” lần đầu)."
+    ],
+    emoji="🛡️", cap="An toàn & thân thiện"
+)
+
+# Slide 14 – Đánh giá & Kết quả kỳ vọng
+add_title_content_slide(
+    "Đánh giá & Kết quả kỳ vọng",
+    [
+        "Bộ biểu mẫu: Chuyên gia, Phụ huynh, Học sinh, Phiếu quan sát, Đồng thuận.",
+        "Chỉ số: % đúng theo tag, WCPM, RT trung vị, due completion rate, streak.",
+        "Kỳ vọng 4–6 tuần: tăng WCPM, giảm lỗi tone & nhóm ưu tiên; hứng thú cao."
+    ],
+    emoji="✅📈", cap="Kỳ vọng tiến bộ"
+)
+
+# Slide 15 – Lộ trình & Kêu gọi hợp tác
+add_title_content_slide(
+    "Lộ trình & Kêu gọi hợp tác",
+    [
+        "Q1–Q2/2025: hoàn thiện ngân hàng mục (segment/tone/pair), game + báo cáo PDF.",
+        "Q3: nội dung đọc theo chủ đề; cải thiện SR/Echo; đa giọng TTS.",
+        "Mời GV/SLP/phụ huynh tham gia pilot; góp ý & dữ liệu ẩn danh.",
+        "Liên hệ: ddh14.github.io/App_for_dyslexia_children/"
+    ],
+    emoji="🗺️🤝", cap="Roadmap"
+)
+
+prs.save("DocDe_GioiThieu.pptx")
+print("Đã xuất: DocDe_GioiThieu.pptx")
