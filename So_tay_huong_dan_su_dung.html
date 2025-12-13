@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sổ tay hướng dẫn – Ứng dụng Đọc Dễ</title>
+  <meta name="description" content="Sổ tay hướng dẫn sử dụng Đọc Dễ: PA, Cards, Reading, Assess, Game, Dashboard, Cài đặt & Đồng bộ.">
+  <style>
+    :root{
+      --ink:#102a43;
+      --muted:#51626f;
+      --accent:#0ea5a0;
+      --bg:#fafafc;
+      --soft:#fff;
+      --paper:#ffffff;
+      --bd:#e6e8ee;
+      --pill:#f4f6fb;
+      --warn:#f59e0b;
+      --good:#16a34a;
+      --tone-ngang:#374151; --tone-sac:#ef4444; --tone-huyen:#3b82f6; --tone-hoi:#f59e0b; --tone-nga:#8b5cf6; --tone-nang:#10b981;
+    }
+    html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji"; line-height:1.6;}
+    a{color:var(--accent);text-decoration:none}
+    a:hover{ text-decoration:underline }
+    .topbar{
+      position:sticky; top:0; z-index:5; background:rgba(255,255,255,.92); backdrop-filter:blur(6px);
+      border-bottom:1px solid var(--bd); padding:10px 12px; display:flex; gap:8px; align-items:center; justify-content:space-between;
+    }
+    .topbar .title{font-weight:800}
+    .topbar .actions{display:flex;gap:6px;flex-wrap:wrap}
+    .topbar button{border:1px solid var(--bd); background:var(--soft); padding:8px 10px; border-radius:8px; cursor:pointer; min-height:40px;}
+    .book{max-width:980px; margin:18px auto; padding:0 10px;}
+    .page{
+      background:var(--paper); border:1px solid var(--bd); border-radius:14px; box-shadow:0 8px 28px rgba(16,42,67,.07);
+      margin:14px 0; position:relative; overflow:hidden;
+    }
+    .page .wrap{ padding:22px; }
+    .cover{ background:linear-gradient(135deg,#FFF3D6,#E8F4FF); }
+    .cover .wrap{ padding:40px 26px; }
+    .cover h1{font-size:40px; margin:0 0 10px; letter-spacing:.3px;}
+    .cover .subtitle{color:#2d3748; font-size:18px; margin-bottom:14px;}
+    .badge{ display:inline-block; background:var(--pill); border:1px solid var(--bd); padding:4px 10px; border-radius:999px; font-weight:700; }
+    h2{ margin:0 0 10px; font-size:26px; }
+    h3{ margin:18px 0 6px; font-size:19px; }
+    .muted{ color:var(--muted); }
+    ul{ margin:6px 0 10px 18px; }
+    .grid-2{ display:grid; grid-template-columns: 1.25fr .75fr; gap:16px; }
+    @media (max-width:900px){ .grid-2{ grid-template-columns:1fr; } }
+    .panel{
+      background:#fff; border:1px solid var(--bd); border-radius:12px; padding:12px;
+    }
+    .callout{ border-left:4px solid var(--accent); background:#ecfeff; }
+    .warn{ border-left:4px solid var(--warn); background:#fff7ed; }
+    .ok{ border-left:4px solid var(--good); background:#f0fdf4; }
+    .pill{ display:inline-block; background:var(--pill); border:1px solid var(--bd); padding:4px 10px; border-radius:999px; margin:2px 6px 2px 0; }
+    .illus{ display:flex; align-items:center; justify-content:center; padding:8px; }
+    .illus svg{ max-width:100%; height:auto; display:block; }
+    .toc a{ display:block; padding:8px 10px; border:1px dashed var(--bd); border-radius:10px; margin:6px 0; background:#fff; }
+    .goalbar{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 0; }
+    .tone-legend{ display:flex; gap:6px; flex-wrap:wrap; }
+    .tone{ color:#fff; font-weight:700; border-radius:999px; padding:2px 8px; font-size:12px; }
+    .tone.ngang{ background:var(--tone-ngang); } .tone.sac{ background:var(--tone-sac); } .tone.huyen{ background:var(--tone-huyen); }
+    .tone.hoi{ background:var(--tone-hoi); } .tone.nga{ background:var(--tone-nga); } .tone.nang{ background:var(--tone-nang); }
+
+    .footer-note{ color:#6b7280; font-size:12px; display:flex; justify-content:space-between; align-items:center; border-top:1px dashed var(--bd); padding:8px 0 0; margin-top:10px; }
+    .num{ font-weight:700; color:#6b7280; }
+    .kbd{ font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background:#f3f4f6; border:1px solid #e5e7eb; border-bottom-width:3px; border-radius:6px; padding:0 6px; }
+    .note{ font-style:italic; color:#475569; }
+    .example{ background:#f9fafb; border:1px dashed var(--bd); border-radius:10px; padding:10px; }
+
+    /* In/ PDF */
+    @page{ size:A4; margin:14mm; }
+    @media print{
+      .topbar{ display:none !important; }
+      .book{ max-width:100%; margin:0; padding:0; }
+      .page{ break-after:page; border:none; box-shadow:none; margin:0 0 12mm 0; border-radius:0; }
+      .page:last-child{ break-after:auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="title">📘 Sổ tay hướng dẫn – Ứng dụng Đọc Dễ</div>
+    <div class="actions">
+      <button onclick="window.print()">🖨️ In / Lưu PDF</button>
+      <button onclick="document.getElementById('toc').scrollIntoView({behavior:'smooth'})">📑 Mục lục</button>
+    </div>
+  </div>
+
+  <main class="book">
+    <!-- Trang 1: Bìa -->
+    <section class="page cover" id="p1">
+      <div class="wrap grid-2">
+        <div>
+          <h1>Đọc Dễ</h1>
+          <div class="subtitle">Hỗ trợ trẻ rối loạn đọc (dyslexia) – Luyện âm vị, thẻ từ theo nhịp (SRS), đọc trôi chảy, hiểu nội dung.</div>
+          <div class="goalbar">
+            <span class="pill">Structured Literacy</span>
+            <span class="pill">Voice UI</span>
+            <span class="pill">TTS & Ghi âm</span>
+            <span class="pill">Dashboard</span>
+            <span class="pill">Offline-first</span>
+          </div>
+          <div class="panel callout" style="margin-top:12px;">
+            Ứng dụng hướng đến: học sinh tiểu học gặp khó khăn đọc tiếng Việt; phụ huynh/giáo viên/SLP muốn có công cụ luyện đều – ngắn – đúng mục tiêu.
+          </div>
+        </div>
+        <div class="illus" aria-hidden="true">
+          <!-- Sách + sóng âm + thẻ -->
+          <svg viewBox="0 0 520 360">
+            <defs>
+              <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE7B5"/><stop offset="1" stop-color="#CDEAFF"/></linearGradient>
+            </defs>
+            <rect x="0" y="0" width="520" height="360" rx="18" fill="url(#g1)"></rect>
+            <g>
+              <rect x="48" y="80" width="190" height="150" rx="12" fill="#fff"></rect>
+              <rect x="58" y="98" width="170" height="14" rx="7" fill="#e9edf5"></rect>
+              <rect x="58" y="122" width="120" height="14" rx="7" fill="#e9edf5"></rect>
+              <path d="M270,160 l40,-40 l90,90" stroke="#16a34a" stroke-width="14" fill="none" stroke-linecap="round"/>
+              <rect x="330" y="90" width="120" height="70" rx="12" fill="#fff"/>
+              <text x="390" y="133" text-anchor="middle" font-size="36">🃏</text>
+              <rect x="270" y="240" width="190" height="26" rx="13" fill="#fff" opacity=".8"/>
+              <rect x="275" y="245" width="90" height="16" rx="8" fill="#c7f9cc"/>
+              <rect x="372" y="245" width="80" height="16" rx="8" fill="#fde68a"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="wrap footer-note"><span class="num">Trang 1</span><span class="muted">Phiên bản sổ tay: 2025</span></div>
+    </section>
+
+    <!-- Trang 2: Mục lục + Tổng quan -->
+    <section class="page" id="p2">
+      <div class="wrap grid-2">
+        <div class="toc" id="toc">
+          <h2>📑 Mục lục</h2>
+          <a href="#p3">1. Bắt đầu nhanh & Cài đặt</a>
+          <a href="#p4">2. Âm vị (PA) – Segment • Tone • Pair</a>
+          <a href="#p5">3. Thẻ từ (Cards) – SRS</a>
+          <a href="#p6">4. Luyện đọc (Reading) – 4 bước</a>
+          <a href="#p7">5. Đánh giá nhanh (Assess)</a>
+          <a href="#p8">6. Trò chơi âm vị (Game)</a>
+          <a href="#p9">7. Dashboard – Xuất – Đồng bộ</a>
+          <a href="#p10">8. Quyền riêng tư và đồng thuận</a>
+          <a href="#p11">9. Kịch bản buổi – mẹo sư phạm</a>
+          <a href="#p12">10. Hỏi đáp – xử lý sự cố</a>
+        </div>
+        <div>
+          <h2>🧭 Tổng quan</h2>
+          <p>Đọc Dễ bám sát nguyên lí Structured Literacy: xây dựng nền âm vị (PA), tự động hoá đơn vị tiếng bằng SRS (Cards), rồi chuyển hoá sang đọc trôi chảy – hiểu nội dung (Reading). Các mô-đun kết nối dữ liệu để cá nhân hoá mục tiêu.</p>
+          <div class="panel ok">
+            Ba nguyên tắc: <b>Ngắn</b> (4–7 phút), <b>Đều</b> (mỗi ngày), <b>Đúng nhóm lỗi</b> (lọc theo tag: tone, s/x, ch/tr, ng/ngh, g/gh, c/k/qu, n/l…).
+          </div>
+          <div class="tone-legend" style="margin-top:8px;">
+            <span class="tone ngang">ngang</span>
+            <span class="tone sac">sắc</span>
+            <span class="tone huyen">huyền</span>
+            <span class="tone hoi">hỏi</span>
+            <span class="tone nga">ngã</span>
+            <span class="tone nang">nặng</span>
+          </div>
+        </div>
+      </div>
+      <div class="wrap footer-note"><span class="num">Trang 2</span><span class="muted">Đọc Dễ – Sổ tay</span></div>
+    </section>
+
+    <!-- Trang 3: Cài đặt -->
+    <section class="page" id="p3">
+      <div class="wrap grid-2">
+        <div>
+          <h2>🚀 Bắt đầu nhanh & Cài đặt</h2>
+          <h3>Thiết lập nhanh (Onboard)</h3>
+          <ul>
+            <li>Nhập tên (tùy chọn – chỉ lưu trên máy), tuổi, lớp.</li>
+            <li>Ứng dụng tự cấp <b>mã ẩn danh</b>; chỉ chỉ số học tập mới được gửi đi (nếu bạn bật đồng bộ).</li>
+          </ul>
+          <h3>Giọng nói & Dễ đọc</h3>
+          <ul>
+            <li>Nút <span class="kbd">🔊 Giọng nói</span>: bật gợi ý bằng giọng – nhấn 1 lần chỉ nói 1 lần để tránh gây phân tâm.</li>
+            <li>Nút <span class="kbd">👁‍🗨 Dễ đọc</span>: đổi font/giãn cách phù hợp.</li>
+            <li><span class="kbd">A−</span>/<span class="kbd">A+</span>: chỉnh cỡ chữ; <span class="kbd">🔎 Con trỏ</span> bật/ tắt soi dòng.</li>
+          </ul>
+          <h3>Chế độ Tự học</h3>
+          <p>Bật <b>🚸 Tự học</b> nếu trẻ tự luyện: ứng dụng tự đọc mẫu khi xuất hiện thẻ/bài.</p>
+          <div class="panel callout">
+            Mẹo: Nếu giọng nói phát tiếng Anh, vào cài đặt thiết bị tải/đặt <b>Tiếng Việt</b> cho TTS. Ứng dụng ưu tiên “vi-VN”.
+          </div>
+        </div>
+        <div class="illus" aria-hidden="true">
+          <!-- Minh họa cài đặt -->
+          <svg viewBox="0 0 520 360">
+            <rect x="0" y="0" width="520" height="360" rx="18" fill="#f8fafc"></rect>
+            <g>
+              <rect x="40" y="60" width="440" height="52" rx="12" fill="#fff" stroke="#e5e7eb"/>
+              <text x="64" y="92" font-size="20">🔊 Giọng nói: Bật</text>
+              <rect x="40" y="126" width="440" height="52" rx="12" fill="#fff" stroke="#e5e7eb"/>
+              <text x="64" y="158" font-size="20">👁‍🗨 Dễ đọc</text>
+              <rect x="40" y="192" width="440" height="52" rx="12" fill="#fff" stroke="#e5e7eb"/>
+              <text x="64" y="224" font-size="20">🚸 Tự học</text>
+              <rect x="40" y="260" width="210" height="44" rx="10" fill="#0ea5a0"/>
+              <text x="72" y="289" font-size="18" fill="#fff">Lưu cài đặt</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="wrap footer-note"><span class="num">Trang 3</span><span class="muted">Bắt đầu nhanh</span></div>
+    </section>
+
+    <!-- Trang 4: PA -->
+    <section class="page" id="p4">
+      <div class="wrap grid-2">
+        <div>
+          <h2>🎯 Âm vị (PA)</h2>
+          <p>PA gồm 3 kiểu nhiệm vụ:</p>
+          <h3>3.2.1 Segment (Onset–Rime/cụm phụ âm)</h3>
+          <ul>
+            <li>Kéo–thả để ghép đúng: <span class="example">tr – anh → tranh</span>.</li>
+            <li>Mục tiêu: nhận diện onset, vần; làm quen cụm <span class="kbd">tr, ch, gh, qu…</span></li>
+          </ul>
+          <h3>3.2.2 Tone (6 thanh)</h3>
+          <ul>
+            <li>Giữ nguyên base (ví dụ: <b>me</b>) và chọn đúng thanh: <i>mé, mè, mẻ, mẽ, mẹ…</i></li>
+            <li>Mục tiêu: phân biệt âm điệu – đặc biệt các cặp khó <b>hỏi–ngã</b>, <b>huyền–hỏi</b>.</li>
+          </ul>
+          <h3>3.2.3 Pair (cặp tối thiểu)</h3>
+          <ul>
+            <li>Nghe–chọn giữa 2 từ gần âm: <b>sôi</b> vs <b>xôi</b>; <b>trẻ</b> vs <b>chẻ</b>…</li>
+            <li>Luyện quy tắc chính tả theo ngữ cảnh: <span class="kbd">c/k/qu</span>, <span class="kbd">ng/ngh</span>, <span class="kbd">g/gh</span>.</li>
+          </ul>
+          <div class="panel ok">
+            Quy trình: 1) 🔊/🐢 nghe mẫu → 2) Thao tác 1 chạm → 3) Phản hồi tức thì → 4) Củng cố (mẫu hoá) nếu đúng 3 mục liên tiếp.
+          </div>
+          <div class="tone-legend" style="margin-top:8px;">
+            <span class="tone ngang">ngang</span><span class="tone sac">sắc</span><span class="tone huyen">huyền</span><span class="tone hoi">hỏi</span><span class="tone nga">ngã</span><span class="tone nang">nặng</span>
+          </div>
+        </div>
+        <div class="illus" aria-hidden="true">
+          <!-- Minh hoạ PA: mảnh ghép + dấu -->
+          <svg viewBox="0 0 520 360">
+            <rect x="0" y="0" width="520" height="360" rx="18" fill="#fefce8"></rect>
+            <g>
+              <rect x="40" y="70" width="180" height="70" rx="12" fill="#fff"/>
+              <text x="90" y="115" font-size="36">tr</text>
+              <rect x="230" y="70" width="180" height="70" rx="12" fill="#fff"/>
+              <text x="300" y="115" font-size="36">anh</text>
+              <rect x="120" y="162" width="280" height="16" rx="8" fill="#fde68a"/>
+              <text x="260" y="210" text-anchor="middle" font-size="42">tranh</text>
+              <g transform="translate(150,250)">
+                <circle cx="0" cy="0" r="10" fill="var(--tone-sac)"/>
+                <circle cx="28" cy="0" r="10" fill="var(--tone-huyen)"/>
+                <circle cx="56" cy="0" r="10" fill="var(--tone-hoi)"/>
+                <circle cx="84" cy="0" r="10" fill="var(--tone-nga)"/>
+                <circle cx="112" cy="0" r="10" fill="var(--tone-nang)"/>
+              </g>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="wrap footer-note"><span class="num">Trang 4</span><span class="muted">PA – Segment / Tone / Pair</span></div>
+    </section>
+
+    <!-- Trang 5: Cards -->
+    <section class="page" id="p5">
+      <div class="wrap grid-2">
+        <div>
+          <h2>🃏 Thẻ từ (Cards) – SRS</h2>
+          <p>Mục tiêu: <b>tự động hoá</b> nhận diện–phát âm tiếng Việt đơn âm tiết có dấu. Mỗi thẻ có emoji gợi nghĩa, màu tone nhất quán.</p>
+          <h3>Cách luyện</h3>
+          <ul>
+            <li>Chọn <b>Chủ đề/nhóm lỗi</b> (tag) → ưu tiên thẻ <b>đến hạn</b>.</li>
+            <li>Mỗi thẻ: bấm <b>🔊</b> (0.9×) hoặc <b>🐢</b> (0.6–0.75×) → tự đọc lại → chọn <b>Dễ/Vừa/Khó</b>.</li>
+            <li>Vòng <b>60s</b> (tuỳ chọn) để tăng nhịp – có điểm & sticker.</li>
+          </ul>
+          <h3>Thuật toán SRS (rút gọn SM‑2)</h3>
+          <ul>
+            <li><b>Q=5/3</b> → tăng nhẹ <i>easiness</i>, khoảng cách ngày 1 → 2–3 → nhân E (tối đa 60 ngày).</li>
+            <li><b>Q=1</b> → giảm E vừa phải, nhắc lại gần; nếu sai 2 lần trong 1 phiên → <i>trì hoãn</i> thẻ sang phiên sau.</li>
+          </ul>
+          <div class="panel warn">
+            Nếu do phương ngữ, ưu tiên tag phù hợp lớp: <b>s/x</b>, <b>ch/tr</b>, <b>d/gi/r</b>… Luyện đều 4–7 phút/ngày là tối ưu.
+          </div>
+        </div>
+        <div class="illus" aria-hidden="true">
+          <!-- Minh hoạ Cards -->
+          <svg viewBox="0 0 520 360">
+            <rect x="0" y="0" width="520" height="360" rx="18" fill="#eef2ff"></rect>
+            <g>
+              <rect x="70" y="60" width="140" height="180" rx="14" fill="#fff" stroke="#dbe1f0"/>
+              <text x="140" y="130" text-anchor="middle" font-size="38">mẹ</text>
+              <text x="140" y="170" text-anchor="middle" font-size="48">👩‍🍼</text>
+              <rect x="220" y="78" width="220" height="20" rx="10" fill="#e5e7eb"/>
+              <rect x="220" y="108" width="140" height="20" rx="10" fill="#e5e7eb"/>
+              <rect x="220" y="138" width="100" height="20" rx="10" fill="#e5e7eb"/>
+              <rect x="220" y="206" width="80" height="30" rx="8" fill="#0ea5a0"/>
+              <rect x="307" y="206" width="80" height="30" rx="8" fill="#fde68a"/>
+              <rect x="394" y="206" width="80" height="30" rx="8" fill="#fecaca"/>
+              <text x="260" y="227" font-size="14" fill="#fff">Dễ</text>
+              <text x="347" y="227" font-size="14">Vừa</text>
+              <text x="434" y="227" font-size="14">Khó</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="wrap footer-note"><span class="num">Trang 5</span><span class="muted">Cards – SRS</span></div>
+    </section>
+
+    <!-- Trang 6: Reading -->
+    <section class="page" id="p6">
+      <div class="wrap grid-2">
+        <div>
+          <h2>📖 Luyện đọc – 4 bước</h2>
+          <ol>
+            <li><b>B1 Chọn</b>: Cấp độ & bài; chỉnh tốc độ TTS nếu cần.</li>
+            <li><b>B2 Đọc</b>: Bấm <b>Bắt đầu</b> → đọc to; theo dõi <b>⏱</b>, <b>WCPM</b>, <b>% đúng</b>. Có <b>Pacer/Spotlight</b> hỗ trợ soi dòng.</li>
+            <li><b>B3 Đánh dấu</b>: chạm vào từ sai; nhấn giữ để chọn loại lỗi (tone, s/x, ch/tr, bỏ âm, thêm âm…).</li>
+            <li><b>B4 Câu hỏi</b>: trả lời 2–3 câu về nội dung để kiểm tra hiểu.</li>
+          </ol>
+          <div class="panel callout">Mẹo: Dùng <b>Echo</b> (đọc mẫu 1 câu) khi trẻ cần mô hình hoá nhịp; bật “🔎 Con trỏ” để tập trung theo dòng.</div>
+          <p class="note">WCPM = số từ đúng mỗi phút; theo dõi tiến bộ theo thời gian trong Dashboard.</p>
+        </div>
+        <div class="illus" aria-hidden="true">
+          <!-- Minh hoạ Reading -->
+          <svg viewBox="0 0 520 360">
+            <rect x="0" y="0" width="520" height="360" rx="18" fill="#ecfeff"></rect>
+            <g>
+              <rect x="40" y="60" width="440" height="210" rx="14" fill="#fff"/>
+              <rect x="60" y="90" width="400" height="14" rx="7" fill="#dbeafe"/>
+              <rect x="60" y="120" width="400" height="14" rx="7" fill="#fde68a"/>
+              <rect x="60" y="150" width="400" height="14" rx="7" fill="#dbeafe"/>
+              <rect x="60" y="180" width="400" height="14" rx="7" fill="#dbeafe"/>
+              <rect x="60" y="210" width="400" height="14" rx="7" fill="#dbeafe"/>
+              <rect x="40" y="282" width="130" height="40" rx="10" fill="#0ea5a0"/>
+              <rect x="180" y="282" width="130" height="40" rx="10" fill="#f97316"/>
+              <text x="105" y="308" font-size="16" fill="#fff">Bắt đầu</text>
+              <text x="245" y="308" font-size="16" fill="#fff">Kết thúc</text>
+              <text x="340" y="305" font-size="14">WCPM • % đúng</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="wrap footer-note"><span class="num">Trang 6</span><span class="muted">Reading – 4 bước</span></div>
+    </section>
+
+    <!-- Trang 7: Assess -->
+    <section class="page" id="p7">
+      <div class="wrap grid-2">
+        <div>
+          <h2>🧪 Đánh giá nhanh (7–10 phút)</h2>
+          <ul>
+            <li><b>PA</b>: cùng vần – chọn đúng.</li>
+            <li><b>RAN</b>: gọi nhanh 50 số – tính giây.</li>
+            <li><b>Decoding</b>: giả từ – người đo tích “Đúng”.</li>
+            <li><b>Sight</b>: từ chức năng – biết ngay ≤2s.</li>
+          </ul>
+          <div class="panel warn">Lưu ý: <b>Evaluation ≠ Diagnosis</b>. Đây là đánh giá học thuật nội bộ để định hướng luyện tập, không phải chẩn đoán y khoa.</div>
+          <p>Kết quả sẽ hiển thị trong Dashboard và gợi ý “nhóm ưu tiên” cho tuần tới (ví dụ: ch/tr, hỏi–ngã).</p>
+        </div>
+        <div class="illus" aria-hidden="true">
+          <!-- Minh hoạ Assess -->
+          <svg viewBox="0 0 520 360">
+            <rect x="0" y="0" width="520" height="360" rx="18" fill="#f8fafc"></rect>
+            <g>
+              <rect x="80" y="60" width="360" height="220" rx="14" fill="#fff" stroke="#e5e7eb"/>
+              <text x="110" y="100" font-size="18">☑ PA</text>
+              <text x="110" y="130" font-size="18">☑ RAN</text>
+              <text x="110" y="160" font-size="18">☑ Decoding</text>
+              <text x="110" y="190" font-size="18">☑ Sight</text>
+              <rect x="160" y="240" width="200" height="36" rx="10" fill="#0ea5a0"/>
+              <text x="260" y="265" text-anchor="middle" font-size="16" fill="#fff">Ghi vào nhật ký</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="wrap footer-note"><span class="num">Trang 7</span><span class="muted">Đánh giá nhanh</span></div>
+    </section>
+
+    <!-- Trang 8: Game -->
+    <section class="page" id="p8">
+      <div class="wrap grid-2">
+        <div>
+          <h2>🎮 Trò chơi âm vị</h2>
+          <p>Chế độ: <b>theo thanh</b> hoặc <b>theo tag</b>. Xem “Mục tiêu”, bấm <b>🔊 Nghe mẫu</b>, chạm đúng bóng có vòng sáng.</p>
+          <ul>
+            <li>Điểm, thời gian, mạng hiển thị rõ ràng.</li>
+            <li>Chế độ “👟 Tập thử” dành cho làm quen không tính điểm.</li>
+          </ul>
+          <div class="panel ok">Mục đích: tạo động lực và củng cố phân biệt qua đa giác quan (nghe – nhìn – chạm).</div>
+        </div>
+        <div class="illus" aria-hidden="true">
+          <!-- Minh hoạ Game -->
+          <svg viewBox="0 0 520 360">
+            <rect x="0" y="0" width="520" height="360" rx="18" fill="#fff7ed"></rect>
+            <g>
+              <circle cx="150" cy="110" r="34" fill="#93c5fd" stroke="#2563eb" stroke-width="4"/>
+              <circle cx="290" cy="160" r="42" fill="#fca5a5" stroke="#ef4444" stroke-width="4"/>
+              <circle cx="210" cy="220" r="30" fill="#86efac" stroke="#22c55e" stroke-width="4"/>
+              <text x="260" y="300" text-anchor="middle" font-size="18">Mục tiêu: thanh <tspan fill="#ef4444">sắc</tspan></text>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="wrap footer-note"><span class="num">Trang 8</span><span class="muted">Game – Động lực</span></div>
+    </section>
+
+    <!-- Trang 9: Dashboard & Export & Sync -->
+    <section class="page" id="p9">
+      <div class="wrap grid-2">
+        <div>
+          <h2>📊 Dashboard – Xuất – Đồng bộ</h2>
+          <ul>
+            <li><b>WCPM</b> & <b>% đúng</b> theo thời gian; tổng lỗi theo loại; thời lượng luyện.</li>
+            <li>PA, RAN, Decoding, Sight: biểu đồ theo phiên.</li>
+            <li>Xuất <b>CSV/PDF</b> để trao đổi với giáo viên/SLP.</li>
+            <li><b>Đồng bộ Google Drive</b> (tùy chọn): dán Apps Script URL + SECRET riêng – <i>opt‑in</i>.</li>
+          </ul>
+          <div class="panel callout">
+            Dữ liệu định danh không bắt buộc; chỉ gửi chỉ số học tập. Bạn có thể xem/ xoá dữ liệu trên thiết bị bất cứ lúc nào.
+          </div>
+        </div>
+        <div class="illus" aria-hidden="true">
+          <!-- Minh hoạ Dashboard -->
+          <svg viewBox="0 0 520 360">
+            <rect x="0" y="0" width="520" height="360" rx="18" fill="#f0fdf4"></rect>
+            <g>
+              <rect x="40" y="60" width="440" height="220" rx="14" fill="#fff" stroke="#e5e7eb"/>
+              <polyline points="60,240 120,200 180,210 240,180 300,190 360,160 420,170" fill="none" stroke="#22c55e" stroke-width="4"/>
+              <rect x="60" y="90" width="80" height="8" rx="4" fill="#fde68a"/>
+              <rect x="60" y="105" width="110" height="8" rx="4" fill="#e5e7eb"/>
+              <rect x="60" y="120" width="90" height="8" rx="4" fill="#e5e7eb"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="wrap footer-note"><span class="num">Trang 9</span><span class="muted">Dashboard & Đồng bộ</span></div>
+    </section>
+
+    <!-- Trang 10: Privacy & Consent -->
+    <section class="page" id="p10">
+      <div class="wrap grid-2">
+        <div>
+          <h2>🛡️ Quyền riêng tư & Đồng thuận</h2>
+          <ul>
+            <li>Không yêu cầu tên thật/TT cá nhân bắt buộc.</li>
+            <li>Không tự gửi bản ghi âm; không thu ảnh/video.</li>
+            <li>Đồng bộ chỉ khi phụ huynh chủ động bật (opt‑in) và cung cấp URL/SECRET.</li>
+            <li>Người dùng có quyền xem/ xoá dữ liệu trên thiết bị.</li>
+          </ul>
+          <div class="panel ok">Trước khi thu thập nhận xét, hiển thị <b>Bản thông tin – Đồng thuận</b> cho phụ huynh/giám hộ và học sinh.</div>
+          <p class="note">Mẫu đồng thuận tham chiếu ở “Bộ biểu mẫu đánh giá Ứng dụng Đọc Dễ”.</p>
+        </div>
+        <div class="illus" aria-hidden="true">
+          <!-- Minh hoạ shield -->
+          <svg viewBox="0 0 520 360">
+            <rect x="0" y="0" width="520" height="360" rx="18" fill="#eef2ff"></rect>
+            <path d="M260 80 L360 120 L340 210 Q260 260 180 210 L160 120 Z" fill="#93c5fd" stroke="#2563eb" stroke-width="4"/>
+            <path d="M230 160 l24 24 l46 -56" stroke="#16a34a" stroke-width="10" fill="none" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+      <div class="wrap footer-note"><span class="num">Trang 10</span><span class="muted">Quyền riêng tư</span></div>
+    </section>
+
+    <!-- Trang 11: Kịch bản buổi -->
+    <section class="page" id="p11">
+      <div class="wrap grid-2">
+        <div>
+          <h2>🗓️ Kịch bản buổi – Mẹo sư phạm</h2>
+          <h3>Phiên chuẩn (5–7 phút)</h3>
+          <ul>
+            <li><b>Khởi động</b> (30–45s): 3 thẻ đến hạn theo tag yếu; nghe 🔊 1 lần.</li>
+            <li><b>Nòng cốt</b> (3–5p): PA hoặc Cards theo filter; thao tác 1 mục tiêu 1 lần.</li>
+            <li><b>Củng cố</b> (30–60s): 3 thẻ “đã vững” hoặc vòng 60s.</li>
+            <li><b>Tổng kết</b> (15–20s): xem điểm/chuỗi, biểu dương, gợi ý phiên sau.</li>
+          </ul>
+          <h3>Mẹo cho nhóm lỗi</h3>
+          <ul>
+            <li><b>Hỏi–ngã</b>: ưu tiên 🐢, so sánh đối chiếu; quan sát đường cong giọng.</li>
+            <li><b>s/x</b> – <b>ch/tr</b>: dùng cặp tối thiểu (PA) + Cards cùng tag.</li>
+            <li><b>ng/ngh – g/gh – c/k/qu</b>: nhắc quy tắc theo nguyên âm sau.</li>
+          </ul>
+        </div>
+        <div class="panel example">
+          <b>Ví dụ tuần “s/x”</b>
+          <ul>
+            <li>PA: sôi/xôi, sáo/xáo, sẻ/xẻ…</li>
+            <li>Cards: tăng tỉ lệ thẻ tag <b>sx</b>.</li>
+            <li>Game: chế độ tag <b>sx</b>.</li>
+            <li>Reading: chọn đoạn có nhiều “s/x”, nhấn mạnh ngắt–nhịp.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="wrap footer-note"><span class="num">Trang 11</span><span class="muted">Kịch bản buổi</span></div>
+    </section>
+
+    <!-- Trang 12: FAQ -->
+    <section class="page" id="p12">
+      <div class="wrap">
+        <h2>❓ Hỏi đáp – Xử lý sự cố</h2>
+        <h3>1) TTS nói tiếng Anh?</h3>
+        <p>Cài/đặt <b>Tiếng Việt</b> cho TTS trên thiết bị (Windows/macOS/iOS/Android). Trong ứng dụng, giọng nói chỉ phát <b>một lần cho mỗi thao tác</b> để tránh phân tâm.</p>
+        <h3>2) Giọng nói lặp nhiều lần?</h3>
+        <p>Đã chặn lặp nhanh trong ứng dụng. Nếu vẫn gặp, tránh bấm lặp nhanh vào cùng một nút; hãy chờ 1 giây giữa các thao tác.</p>
+        <h3>3) Thanh đáy che nội dung?</h3>
+        <p>Thanh điều hướng tự ẩn khi không dùng; chạm nhẹ mép dưới màn hình để hiện lại. Khu vực nội dung được chừa đệm để không bị che.</p>
+        <h3>4) Không thấy dữ liệu thẻ?</h3>
+        <p>Vào <b>Thẻ từ</b> → bấm <b>Cập nhật thẻ mới</b>. Chọn Bộ lọc tag phù hợp.</p>
+        <h3>5) Có thể xuất báo cáo cho giáo viên?</h3>
+        <p>Mở <b>Dashboard</b> → <b>Tải CSV</b> hoặc xuất <b>Evaluation Summary (PDF)</b>.</p>
+        <div class="panel callout" style="margin-top:8px;">
+          Cần trợ giúp thêm? Gửi phản hồi qua mục <b>Hướng dẫn → Phản hồi</b> trong ứng dụng.
+        </div>
+      </div>
+      <div class="wrap footer-note"><span class="num">Trang 12</span><span class="muted">FAQ & Hỗ trợ</span></div>
+    </section>
+  </main>
+</body>
+</html>
