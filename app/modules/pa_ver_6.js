@@ -144,6 +144,55 @@
     speak(text, Math.max(0.6, Math.min(0.9, base - 0.2)));
   }
 
+// Tạo bảng đảo để bỏ dấu thanh về nguyên âm gốc (giữ ê/ơ/ô/ư/ă/â)
+const REVERSE_TONE = (() => {
+  const map = {};
+  for (const [base, tones] of Object.entries(ACCENT_MAP)){
+    for (const ch of Object.values(tones)) map[ch] = base; // á/à/ả/ã/ạ → a; ấ/ầ… → â; ...
+    map[base] = base; // chính nó
+  }
+  return map;
+})();
+
+// Bỏ dấu thanh trong 1 tiếng, giữ đặc trưng ê/ơ/ô/ư/ă/â
+function stripTone(syllable){
+  const arr = Array.from(String(syllable||''));
+  for (let i=0;i<arr.length;i++){
+    const ch = arr[i];
+    if (REVERSE_TONE[ch]) arr[i] = REVERSE_TONE[ch];
+  }
+  return arr.join('');
+}
+
+// Tìm vị trí nguyên âm để đặt dấu (quy tắc đơn giản: nguyên âm KHÔNG thuộc "qu" được coi là ứng viên cuối cùng)
+function lastVowelIndex(s){
+  const arr = Array.from(s);
+  for (let i=arr.length-1;i>=0;i--){
+    const ch = arr[i];
+    if (ACCENT_MAP[ch]){
+      // xử lý "qu": u trong "qu" không coi là nguyên âm độc lập
+      if (ch==='u' && i>0 && arr[i-1]==='q') continue;
+      return i;
+    }
+  }
+  return -1;
+}
+
+// Ghi đè applyTone: luôn stripTone trước, rồi đặt dấu lên nguyên âm cuối
+function applyTone(syllable, tone){
+  if (!syllable) return syllable;
+  const base = stripTone(syllable);
+  const idx = lastVowelIndex(base);
+  if (idx<0) return base; // không thấy nguyên âm
+  const arr = Array.from(base);
+  const v = arr[idx];
+  const toneChar = ACCENT_MAP[v]?.[tone];
+  if (!toneChar) return base;
+  arr[idx] = toneChar;
+  return arr.join('');
+}
+
+
   // Tô màu thanh điệu trong một tiếng (dựa trên ký tự nguyên âm mang dấu)
   function detectTone(word){
     for (let ch of word){
@@ -203,10 +252,10 @@
   // DỮ LIỆU: lấy từ window.PA_ITEMS (nếu có) + bổ sung fallback
   function normalizeData(){
     const raw = Array.isArray(window.PA_ITEMS) ? window.PA_ITEMS : [];
-    const segments = raw.filter(x=> x && x.type==='segment' && Array.isArray(x.parts) && x.parts.length>=2)
+    const segments = raw.filter(x=> x && x.type==='ghép âm' && Array.isArray(x.parts) && x.parts.length>=2)
       .map(x=> ({...x, level: x.level||inferLevelFromSegment(x)}));
-    const pairs = raw.filter(x=> x && x.type==='pair' && Array.isArray(x.choices) && x.choices.length===2);
-    const tones = raw.filter(x=> x && x.type==='tone'); // hiếm khi có, ta sinh động
+    const pairs = raw.filter(x=> x && x.type==='cặp từ' && Array.isArray(x.choices) && x.choices.length===2);
+    const tones = raw.filter(x=> x && x.type==='thanh'); // hiếm khi có, ta sinh động
 
     // Fallback – theo 3 cấp (mở rộng)
     const fallbackSegments = [
@@ -564,9 +613,9 @@
     // Tabs
     const tabs = document.createElement('div'); tabs.className='pa-tabs'; tabs.setAttribute('role','tablist');
     [
-      {id:'segment', label:'Segment'},
-      {id:'tone', label:'Tone'},
-      {id:'pair', label:'Pair'}
+      {id:'segment', label:'Ghép âm'},
+      {id:'tone', label:'Thanh'},
+      {id:'pair', label:'Cặp từ'}
     ].forEach(t=>{
       const btn = document.createElement('button');
       btn.className='pa-tab';
@@ -660,7 +709,7 @@
 
     // Tiêu đề + điều khiển nghe
     const title = document.createElement('div'); title.className='pa-title';
-    title.textContent = S.mode==='segment' ? 'Ghép onset–rime/cụm phụ âm'
+    title.textContent = S.mode==='segment' ? 'Ghép âm đầu- vần/cụm phụ âm'
                     : S.mode==='tone'    ? 'Thanh điệu – 6 thanh'
                     : 'Cặp tối thiểu (chính tả/âm vị)';
     card.appendChild(title);
@@ -961,13 +1010,28 @@
     const list = Data.toneBasesByLevel[S.level] || Data.toneBasesByLevel[1];
     return list[Math.floor(Math.random()*list.length)];
   }
+  function buildToneForms(baseRaw){
+    const base = stripTone(baseRaw); // quan trọng: tránh trường hợp base đã có dấu
+    const forms = TONE_NAMES.map(t=> ({ tone: t, text: applyTone(base, t) }));
+    // Nếu có trùng lặp (rất hiếm khi base bất thường), fallback về base "me"
+    const uniq = new Set(forms.map(f=>f.text));
+    if (uniq.size < 6){
+      const safeBase = 'me'; // base an toàn
+      return TONE_NAMES.map(t=> ({ tone:t, text: applyTone(safeBase, t)}));
+    }
+    return forms;
+  }
 
   function renderToneTask(body){
-    const base = pickToneBase();
-    const forms = TONE_NAMES.map(t=> ({ tone:t, text: applyTone(base, t) }));
+    const baseRaw = pickToneBase();
+    const forms = buildToneForms(baseRaw);
     const target = forms[Math.floor(Math.random()*forms.length)];
-    S.current.item = { base, forms, target, tags:['tone', `tone:${target.tone}`] };
-    S.current.hints = 0; S.current.startAt=Date.now(); S.current.id=`tone:${base}:${target.tone}`;
+    // Lưu item hiện tại
+    S.current.item = { base: stripTone(baseRaw), forms, target, tags:['tone', `tone:${target.tone}`] };
+    S.current.hints = 0;
+    S.current.startAt = Date.now();
+    S.current.id = `tone:${S.current.item.base}:${target.tone}`;
+    S.current.attempts = 0; // đếm số lần chọn sai
     cueBeep();
 
     const grid = document.createElement('div'); grid.className='pa-grid';
@@ -975,44 +1039,62 @@
     // Trái
     const left = document.createElement('div');
     const big = document.createElement('div'); big.className='pa-bigword';
-    big.innerHTML = `Chọn thanh đúng cho: <b>${escapeHTML(base)}</b>`;
+    big.innerHTML = `Chọn thanh đúng cho: <b>${escapeHTML(S.current.item.base)}</b>`;
     left.appendChild(big);
 
     const instr = document.createElement('div'); instr.className='pa-instr';
-    instr.textContent = 'Bấm 🔊 để nghe rồi chọn biến thể có thanh điệu đúng. (Giữ nguyên onset/vần, chỉ đổi thanh)';
+    instr.textContent = 'Bấm 🔊 để nghe rồi chọn biến thể có thanh điệu đúng. (Sai sẽ được yêu cầu chọn lại)';
     left.appendChild(instr);
 
     const toneGrid = document.createElement('div'); toneGrid.className='tone-grid';
+
+    // Tạo nút đáp án
     forms.forEach(({tone, text})=>{
       const b = document.createElement('button');
       b.className='tone-btn';
       b.dataset.tone = tone;
       b.textContent = text;
       b.onclick = ()=>{
+        // Nếu nút đã disabled (đã chọn sai trước đó), bỏ qua
+        if (b.disabled) return;
+
         const end = Date.now();
         const correct = (tone===target.tone);
         const rt = end - S.current.startAt;
         const tags = [`tone:${target.tone}`];
+
         if (correct){
           b.classList.add('pa-correct'); setTimeout(()=> b.classList.remove('pa-correct'), 360);
-          try{ VoiceUI?.enabled && VoiceUI.say('Giỏi lắm!'); }catch(_){}
+          try{ VoiceUI?.enabled && VoiceUI.say('Đúng rồi!'); }catch(_){}
+          updateStats(true, tags, rt);
+          logTrial({ id:S.current.id, target:target.text, choice:text, correct:true, rt, tags });
+
+          // Chuyển sang mục mới sau 600ms
+          setTimeout(()=> renderTaskOnly(), 600);
         } else {
+          // Sai: rung + báo “Chưa đúng, chọn lại”
+          S.current.attempts = (S.current.attempts||0) + 1;
           b.classList.add('pa-shake'); setTimeout(()=> b.classList.remove('pa-shake'), 300);
+          b.disabled = true; // không cho bấm lại cùng đáp án
           vibrate(60);
-          const hardPairs = (target.tone==='hỏi'||target.tone==='ngã') ? HINTS_BY_TAG.tone_hỏi_ngã
-                             : (target.tone==='huyền'||target.tone==='hỏi') ? 'Huyền (\\) hạ giọng; Hỏi (ˇ) uốn giọng.'
-                             : (target.tone==='sắc'||target.tone==='ngã') ? 'Sắc (/) cao lên; Ngã (~) gãy/rung.'
-                             : '';
-          if (hardPairs) showHint(body, hardPairs);
+          showHint(body, 'Chưa đúng, hãy chọn lại thanh điệu phù hợp.');
+          // Gợi ý tăng cường cho hỏi/ngã/huyền/hỏi
+          const hp = (target.tone==='hỏi'||target.tone==='ngã') ? 'Mẹo: Hỏi (ˇ) uốn giọng; Ngã (~) gãy/rung.'
+                   : (target.tone==='huyền'||target.tone==='hỏi') ? 'Mẹo: Huyền (\\) hạ giọng; Hỏi (ˇ) uốn giọng.' : '';
+          if (hp) showHint(body, hp);
+          // Phát lại chậm đáp án đúng để đối chiếu
           speakSlow(target.text);
+
+          updateStats(false, tags, rt);
+          logTrial({ id:S.current.id, target:target.text, choice:text, correct:false, rt, tags });
+
+          // Không chuyển mục — yêu cầu chọn lại
+          // Nếu sai ≥2 đáp án, hiển thị “gợi ý màu thanh”
+          if (S.current.attempts === 2){
+            const legend = TONE_NAMES.map(t=> `<span class="tone-pill" style="background:${TONE_COLORS[t]}">${t}</span>`).join(' ');
+            showPattern(body, `Mã hóa thị giác: ${legend}`);
+          }
         }
-        updateStats(correct, tags, rt);
-        logTrial({ id:S.current.id, target:target.text, choice:text, correct, rt, tags });
-        if (correct && S.extend && S.stats.streak>0 && S.stats.streak%3===0){
-          const legend = TONE_NAMES.map(t=> `<span class="tone-pill" style="background:${TONE_COLORS[t]}">${t}</span>`).join(' ');
-          showPattern(body, `Mã hóa thị giác: ${legend}`);
-        }
-        setTimeout(()=> renderTaskOnly(), 450);
       };
       toneGrid.appendChild(b);
     });
@@ -1028,14 +1110,14 @@
     actions.append(btnHear, btnSlow, btnNext);
     left.appendChild(actions);
 
-    // Phải: legend tone và minh họa
+    // Phải
     const right = document.createElement('div');
     const art = document.createElement('div'); art.className='pa-art';
     art.innerHTML = wordArtSVG(target.text);
     right.appendChild(art);
 
+    // Legend 6 thanh
     const legend = document.createElement('div'); legend.className='tone-legend';
-    legend.setAttribute('aria-label','Mã hóa màu thanh điệu');
     TONE_NAMES.forEach(t=>{
       const pill = document.createElement('span');
       pill.className='tone-pill';
@@ -1058,7 +1140,6 @@
     return item;
   }
 
-  // Đánh dấu phần khác nhau giữa 2 từ (để minh họa)
   function diffMarkup(a, b){
     const aArr = Array.from(a);
     const bArr = Array.from(b);

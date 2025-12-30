@@ -194,10 +194,13 @@ function applyTone(syllable, tone){
 
 
   // Tô màu thanh điệu trong một tiếng (dựa trên ký tự nguyên âm mang dấu)
+  // Ưu tiên nhận diện các thanh có dấu; nếu không có dấu nào → mặc định "ngang".
+  // Tránh trả về "ngang" sớm chỉ vì gặp nguyên âm chưa có dấu ở đầu từ.
   function detectTone(word){
-    for (let ch of word){
+    const s = String(word || '').toLocaleLowerCase('vi-VN');
+    for (let ch of s){
       const t = TONE_LOOKUP[ch];
-      if (t) return t;
+      if (t && t !== 'ngang') return t; // chỉ trả về khi thấy dấu thật sự
     }
     return 'ngang';
   }
@@ -207,16 +210,18 @@ function applyTone(syllable, tone){
     return `<span class="pa-word" data-tone="${t}" style="color:${c}">${escapeHTML(word)}</span>`;
   }
 
-  // Áp dấu thanh cho 1 tiếng base (đặt trên nguyên âm cuối)
+  // Áp dấu thanh cho 1 tiếng (đặt trên nguyên âm cuối, loại bỏ dấu cũ, xử lý đặc biệt "qu")
+  // Hợp nhất với logic phía trên để tránh sai lệch (ví dụ chọn sai vị trí → ngã thành sắc, hỏi thành huyền).
   function applyTone(syllable, tone){
     if (!syllable) return syllable;
-    const vowels = Array.from(syllable).map((ch,i)=> ({i, ch, isVowel: ACCENT_MAP[ch]!=null}));
-    const last = [...vowels].reverse().find(v=> v.isVowel);
-    if (!last) return syllable;
-    const toneChar = ACCENT_MAP[last.ch]?.[tone];
-    if (!toneChar) return syllable;
-    const arr = Array.from(syllable);
-    arr[last.i] = toneChar;
+    const base = stripTone(syllable);           // luôn bỏ dấu cũ
+    const idx = lastVowelIndex(base);           // chọn nguyên âm cuối, bỏ qua "u" trong "qu"
+    if (idx < 0) return base;
+    const arr = Array.from(base);
+    const v = arr[idx];
+    const toneChar = ACCENT_MAP[v]?.[tone];
+    if (!toneChar) return base;
+    arr[idx] = toneChar;
     return arr.join('');
   }
 
@@ -252,10 +257,10 @@ function applyTone(syllable, tone){
   // DỮ LIỆU: lấy từ window.PA_ITEMS (nếu có) + bổ sung fallback
   function normalizeData(){
     const raw = Array.isArray(window.PA_ITEMS) ? window.PA_ITEMS : [];
-    const segments = raw.filter(x=> x && x.type==='segment' && Array.isArray(x.parts) && x.parts.length>=2)
+    const segments = raw.filter(x=> x && x.type==='ghép âm' && Array.isArray(x.parts) && x.parts.length>=2)
       .map(x=> ({...x, level: x.level||inferLevelFromSegment(x)}));
-    const pairs = raw.filter(x=> x && x.type==='pair' && Array.isArray(x.choices) && x.choices.length===2);
-    const tones = raw.filter(x=> x && x.type==='tone'); // hiếm khi có, ta sinh động
+    const pairs = raw.filter(x=> x && x.type==='cặp từ' && Array.isArray(x.choices) && x.choices.length===2);
+    const tones = raw.filter(x=> x && x.type==='thanh'); // hiếm khi có, ta sinh động
 
     // Fallback – theo 3 cấp (mở rộng)
     const fallbackSegments = [
@@ -613,9 +618,9 @@ function applyTone(syllable, tone){
     // Tabs
     const tabs = document.createElement('div'); tabs.className='pa-tabs'; tabs.setAttribute('role','tablist');
     [
-      {id:'segment', label:'Segment'},
-      {id:'tone', label:'Tone'},
-      {id:'pair', label:'Pair'}
+      {id:'segment', label:'Ghép âm'},
+      {id:'tone', label:'Thanh'},
+      {id:'pair', label:'Cặp từ'}
     ].forEach(t=>{
       const btn = document.createElement('button');
       btn.className='pa-tab';
@@ -709,7 +714,7 @@ function applyTone(syllable, tone){
 
     // Tiêu đề + điều khiển nghe
     const title = document.createElement('div'); title.className='pa-title';
-    title.textContent = S.mode==='segment' ? 'Ghép onset–rime/cụm phụ âm'
+    title.textContent = S.mode==='segment' ? 'Ghép âm đầu- vần/cụm phụ âm'
                     : S.mode==='tone'    ? 'Thanh điệu – 6 thanh'
                     : 'Cặp tối thiểu (chính tả/âm vị)';
     card.appendChild(title);
@@ -1141,20 +1146,33 @@ function applyTone(syllable, tone){
   }
 
   // Đánh dấu phần khác nhau giữa 2 từ (để minh họa)
+  // Sửa lỗi lặp ký tự ở từ ngắn (ví dụ "gẹ" bị hiển thị "gẹẹ", "gìm" thành "gììm").
   function diffMarkup(a, b){
-    const aArr = Array.from(a);
-    const bArr = Array.from(b);
+    const aArr = Array.from(String(a || ''));
+    const bArr = Array.from(String(b || ''));
     const n = Math.min(aArr.length, bArr.length);
-    let p = 0; while (p<n && aArr[p]===bArr[p]) p++;
-    let s = 0; while (s<n-p && aArr[aArr.length-1-s]===bArr[bArr.length-1-s]) s++;
-    const aPre = aArr.slice(0,p).join('');
-    const bPre = bArr.slice(0,p).join('');
-    const aMid = aArr.slice(p, aArr.length - s).join('') || aArr[p] || '';
-    const bMid = bArr.slice(p, bArr.length - s).join('') || bArr[p] || '';
+
+    let p = 0;
+    while (p < n && aArr[p] === bArr[p]) p++;
+
+    let s = 0;
+    while (s < n - p && aArr[aArr.length - 1 - s] === bArr[bArr.length - 1 - s]) s++;
+
+    const aPre = aArr.slice(0, p).join('');
+    const bPre = bArr.slice(0, p).join('');
+
+    // Không dùng ký tự dự phòng khi đoạn giữa rỗng → tránh lặp.
+    const aMid = aArr.slice(p, aArr.length - s).join('');
+    const bMid = bArr.slice(p, bArr.length - s).join('');
+
     const aSuf = aArr.slice(aArr.length - s).join('');
     const bSuf = bArr.slice(bArr.length - s).join('');
-    const aHTML = `<span class="diff-word"><span class="diff-same">${escapeHTML(aPre)}</span><span class="diff-a">${escapeHTML(aMid)}</span><span class="diff-same">${escapeHTML(aSuf)}</span></span>`;
-    const bHTML = `<span class="diff-word"><span class="diff-same">${escapeHTML(bPre)}</span><span class="diff-b">${escapeHTML(bMid)}</span><span class="diff-same">${escapeHTML(bSuf)}</span></span>`;
+
+    const aMidHTML = aMid ? `<span class="diff-a">${escapeHTML(aMid)}</span>` : '';
+    const bMidHTML = bMid ? `<span class="diff-b">${escapeHTML(bMid)}</span>` : '';
+
+    const aHTML = `<span class="diff-word"><span class="diff-same">${escapeHTML(aPre)}</span>${aMidHTML}<span class="diff-same">${escapeHTML(aSuf)}</span></span>`;
+    const bHTML = `<span class="diff-word"><span class="diff-same">${escapeHTML(bPre)}</span>${bMidHTML}<span class="diff-same">${escapeHTML(bSuf)}</span></span>`;
     return { aHTML, bHTML };
   }
 

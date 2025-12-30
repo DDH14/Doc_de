@@ -1,8 +1,7 @@
 /* MODULE: READING – 4 bước + B5 xem kết quả, ghi âm tự động, 1-minute reading,
    gợi ý lỗi, hiển thị đoạn dễ đọc (B2, có highlight từ đúng/sai nếu có ASR),
    đánh dấu từ (B3), ước tính WCPM/% (nếu có ASR), thanh luyện từ sai,
-   micro-prompt khi im lặng, màn Xem kết quả (B5), và thanh trợ giúp B2:
-   Spotlight/Tricky/Echo/Pacer + No-guess prompt. */
+   micro-prompt khi im lặng, và màn Xem kết quả (B5). */
 window.ReadingModule = {
   // Trạng thái chung
   level: (window.AppState && window.AppState.learner && window.AppState.learner.level) || 1,
@@ -26,10 +25,15 @@ window.ReadingModule = {
   readTokenElems: [],       // B2 (token dạng không bấm, để highlight)
   b2Status: [],             // 'unknown' | 'wrong' | 'correct' (trạng thái bền)
 
+  // Thuật toán streaming 1 chiều cho B2
+  b2Frontier: 0,            // chỉ số từ kỳ vọng đã commit đến (không lùi)
+  b2RecIdx: 0,              // số token ASR (live) đã xử lý (không lùi)
+  b2Win: 8,                 // cửa sổ tìm khớp gần (giải quyết từ lặp lại)
+
   // Nhận dạng & âm thanh
   asr: null,
-  asrText: '',
-  asrLiveText: '',
+  asrText: '',              // FINAL transcript (ổn định)
+  asrLiveText: '',          // FINAL + INTERIM (cho streaming)
   asrAvailable: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
   audioMutedDuringRec: false,
   prevVoiceUIEnabled: true,
@@ -41,17 +45,6 @@ window.ReadingModule = {
   _currentStep: 1,
   _step5Ready: false,
   _lastComp: null,          // lưu lựa chọn/điểm hiểu ở B4 để hiển thị ở B5
-
-  // Trợ giúp B2
-  _spotOn: null,
-  _spotWidth: 4,
-  _spotIdxManual: null,
-  _pacerOn: false,
-  _pacerWPM: 80,
-  _pacerTid: null,
-  _echoOn: false,
-  _echoIdx: 0,
-  _noGuessLastTs: 0,
 
   // Tiện ích
   wordSplit(text){
@@ -99,11 +92,8 @@ window.ReadingModule = {
     const sA = document.getElementById('statAcc'); if (sA) sA.textContent='—';
     const t = document.getElementById('timer'); if (t) t.textContent='00:00';
 
-    // Child mode → bật “1 dòng” & Spotlight mặc định
-    if (window.AppState && AppState.childMode) {
-      this.ensureFocusOn(true);
-      this._spotOn = true;
-    }
+    // Child mode → bật “1 dòng”
+    if (window.AppState && AppState.childMode) this.ensureFocusOn(true);
     this.markModeState = (window.AppState && AppState.childMode) ? 'error' : 'normal';
   },
 
@@ -163,6 +153,7 @@ window.ReadingModule = {
       const existedAttr = sec.querySelector(`button[onclick*="App.reading.goStep(${prev})"]`);
       const existedInjected = sec.querySelector(`button[data-back-btn="1"][data-prev-step="${prev}"]`);
       if (existedAttr) {
+        // Gắn cờ để lần sau khỏi chèn nhầm
         existedAttr.setAttribute('data-back-btn','1');
         existedAttr.setAttribute('data-prev-step', String(prev));
         return;
@@ -176,7 +167,7 @@ window.ReadingModule = {
       back.setAttribute('data-voice','Quay lại bước trước');
       back.setAttribute('data-back-btn','1');
       back.setAttribute('data-prev-step', String(prev));
-      back.setAttribute('onclick', `App.reading.goStep(${prev})`);
+      back.setAttribute('onclick', `App.reading.goStep(${prev})`); // đặt attr để selector nhận ra lần sau
       const firstRow = sec.querySelector('.row');
       if (firstRow) firstRow.insertBefore(back, firstRow.firstChild);
       else sec.insertBefore(back, sec.firstChild);
@@ -237,6 +228,7 @@ window.ReadingModule = {
       const p = parts[i];
       if (/^[.!?…]+$/.test(p)) {
         buffer += p;
+        // render một dòng bằng token
         const line = document.createElement('div');
         line.className = 'reading-line';
         const words = this.wordSplit(buffer);
@@ -293,11 +285,6 @@ window.ReadingModule = {
     this.applyFocusMask();
     // reset highlight khi đổi bài
     this.clearB2Styles();
-
-    // Chèn thanh trợ giúp B2 (Spotlight/Tricky/Echo/Pacer)
-    this.ensureB2AssistBar();
-    // Cập nhật Spotlight lúc đầu
-    this.updateSpotlight();
   },
 
   /* ========== B3: hiển thị đoạn bấm‑được ========== */
@@ -485,8 +472,9 @@ window.ReadingModule = {
     this.started = true; this.startTime = window.__now(); this.errors = {};
     this.asrText = ''; this.asrLiveText = '';
     this.clearB2Styles();
+    // Khởi tạo trạng thái bền cho B2
     this.b2Status = new Array(this.wordSplit(this.passage.text).length).fill('unknown');
-    this._spotIdxManual = null; // để Spotlight bám theo tiến trình lúc đọc
+    this.b2Frontier = 0; this.b2RecIdx = 0;
 
     this.updateTimer();
 
@@ -565,7 +553,7 @@ window.ReadingModule = {
       }
     })();
 
-    // Bật ASR (nếu khả dụng) để highlight theo thời gian thực
+    // Bật ASR (nếu khả dụng) để highlight đúng/sai theo thời gian thực bền vững
     if (this.asrAvailable){
       try{
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -576,12 +564,14 @@ window.ReadingModule = {
           this.asr.continuous = true;
           this._lastASRAt = window.__now();
           this.asr.onresult = (e)=>{
-            // tích lũy final + interim để so khớp
+            // tích lũy final + interim để so khớp (streaming 1 chiều)
             let interim = '';
+            let gotFinal = false;
             for (let i=e.resultIndex;i<e.results.length;i++){
               const seg = e.results[i][0].transcript || '';
               if (e.results[i].isFinal) {
                 this.asrText += (seg + ' ');
+                gotFinal = true;
                 this._lastASRAt = window.__now();
               } else {
                 interim += seg + ' ';
@@ -589,7 +579,8 @@ window.ReadingModule = {
               }
             }
             this.asrLiveText = (this.asrText + ' ' + interim).trim();
-            this.updateLiveHighlight(); // sẽ kéo Spotlight theo tiến trình
+            // Cập nhật theo streaming (tiến 1 chiều), luôn bắt từ sai tại vị trí đang đọc
+            this.updateLiveHighlight();
           };
           this.asr.onend = ()=>{
             if (this.started && this.asr) { try{ this.asr.start(); }catch(_){ } }
@@ -632,13 +623,13 @@ window.ReadingModule = {
     const bs = document.getElementById('btnStartRead'); const be = document.getElementById('btnStopRead');
     if (bs) bs.disabled = false; if (be) be.disabled = true;
 
-    // Tính toán tự động nếu có ASR; nếu không, giữ “—” và sang B3 đánh dấu thủ công
+    // Tính toán tự động nếu có ASR, ngược lại thử lấy transcript từ server nếu có upload URL
     const dur = window.__now() - this.startTime;
     const expected = this.wordSplit(this.passage.text);
     let correct = null;
 
     const finalizeWithTranscript = (transcriptText)=>{
-      if (!transcriptText) {
+      if (!transcriptText) { // không có transcript → để đánh dấu thủ công
         const sW = document.getElementById('statWCPM'); if (sW) sW.textContent = '—';
         const sA = document.getElementById('statAcc'); if (sA) sA.textContent = '—';
         this._sessionTemp = { dur, total: expected.length, correct: expected.length, wcpm: 0, acc: 0 };
@@ -649,11 +640,10 @@ window.ReadingModule = {
       const matched = this.lcsLength(expected.map(this.normalizeText), rec);
       correct = matched;
       const total = expected.length;
-      const minutes = Math.max(0.5, dur/60000); // ràng buộc tối thiểu 30s để số ổn định hơn
+      const minutes = Math.max(0.5, dur/60000);
       const wcpm = Math.round(correct / minutes);
       const acc = total ? +(correct/total).toFixed(3) : 0;
       this._sessionTemp = { dur, total, correct, wcpm, acc, auto:true, asrText: transcriptText };
-
       const sW = document.getElementById('statWCPM'); if (sW) sW.textContent = wcpm;
       const sA = document.getElementById('statAcc'); if (sA) sA.textContent = (acc*100).toFixed(0) + '%';
       if (window.VoiceUI && typeof VoiceUI.say === 'function') VoiceUI.say(`Đã dừng. Tốc độ ${wcpm} từ một phút. Chính xác ${Math.round(acc*100)} phần trăm.`);
@@ -662,31 +652,34 @@ window.ReadingModule = {
       this.suggestFromTranscript(expected, transcriptText);
     };
 
-    // Nếu có transcript từ WebSpeech
+    // Nếu ASR (WebSpeech) có transcript đã thu
     if (this.asrText && this.asrText.trim()){
       finalizeWithTranscript(this.asrText);
-    } else {
-      // Nếu không có ASR nhưng có ghi âm và có URL upload để chuyển giọng → text
-      const uploadUrl = window.ASR_UPLOAD_URL || null;
-      if (window.Recorder?.lastBlob && uploadUrl){
-        const blob = window.Recorder.lastBlob;
-        const fd = new FormData();
-        fd.append('audio', blob, 'rec.webm');
-        fetch(uploadUrl, { method:'POST', body: fd })
-          .then(r=>r.json())
-          .then(j=>{
-            const txt = (j && j.text) ? j.text : '';
-            finalizeWithTranscript(txt);
-          })
-          .catch(err=>{
-            console.error('Upload/ASR server error', err);
-            finalizeWithTranscript(''); // fallback -> sang B3
-          });
-      } else {
-        // Không có ASR và không có upload URL -> để đánh dấu thủ công
-        finalizeWithTranscript('');
-      }
+      return;
     }
+
+    // Nếu không có ASR nhưng có recorder blob -> nếu có URL upload, gửi để transcribe
+    const uploadUrl = window.ASR_UPLOAD_URL || null; // set window.ASR_UPLOAD_URL='https://.../transcribe' nếu có server
+    if (window.Recorder?.lastBlob && uploadUrl){
+      // upload blob để transcribe (server phải trả JSON { text: '...' })
+      const blob = window.Recorder.lastBlob;
+      const fd = new FormData();
+      fd.append('audio', blob, 'rec.webm');
+      fetch(uploadUrl, { method:'POST', body: fd })
+        .then(r=>r.json())
+        .then(j=>{
+          const txt = (j && j.text) ? j.text : '';
+          finalizeWithTranscript(txt);
+        })
+        .catch(err=>{
+          console.error('Upload/ASR server error', err);
+          finalizeWithTranscript(''); // fallback -> sang bước 3
+        });
+      return;
+    }
+
+    // Không có ASR và không có upload URL -> để đánh dấu thủ công
+    finalizeWithTranscript('');
   },
 
   // Gợi ý lỗi: đánh dấu nghi ngờ (dashed orange) dựa trên căn chỉnh tham lam (khi stop)
@@ -712,7 +705,9 @@ window.ReadingModule = {
 
   // LCS (ước lượng số từ đúng)
   lcsLength(a, b){
+    // dùng chỉ 2 hàng để tiết kiệm bộ nhớ (O(n*m) time, O(min(n,m)) space)
     if (!Array.isArray(a) || !Array.isArray(b)) return 0;
+    // để giảm chi phí, đảm bảo b là ngắn hơn
     if (a.length < b.length) { const tmp=a; a=b; b=tmp; }
     const m = b.length, n = a.length;
     const prev = new Array(m+1).fill(0);
@@ -722,19 +717,22 @@ window.ReadingModule = {
         if (a[i-1] === b[j-1]) cur[j] = prev[j-1] + 1;
         else cur[j] = Math.max(prev[j], cur[j-1]);
       }
+      // swap rows
       for (let k=0;k<=m;k++){ prev[k]=cur[k]; cur[k]=0; }
     }
     return prev[m];
   },
 
-  /* ========== Highlight đúng/sai theo thời gian thực ở B2 (nếu có ASR) – bền vững ========== */
+  /* ========== Highlight đúng/sai realtime theo streaming 1 chiều ========== */
   clearB2Styles(){
     for (const el of this.readTokenElems){
       if (!el) continue;
       el.style.background = ''; el.style.boxShadow = ''; el.style.outline = '';
-      el.style.borderBottom = ''; // clear overlay
+      el.style.borderBottom = ''; // nếu có overlay
     }
     this.b2Status = new Array(this.readTokenElems.length).fill('unknown');
+    this.b2Frontier = 0;
+    this.b2RecIdx = 0;
   },
   styleCorrect(el){
     if (!el) return;
@@ -756,84 +754,71 @@ window.ReadingModule = {
       if (cur !== 'correct'){
         this.b2Status[i] = 'correct';
         this.styleCorrect(el);
-        if (this.errors[i]) delete this.errors[i];
+        if (this.errors[i]) delete this.errors[i]; // wrong -> correct
       }
     } else if (state === 'wrong'){
+      // Sai chỉ được nâng lên thành đúng, không bị hạ/clear bởi lần sau
       if (cur !== 'correct' && cur !== 'wrong'){
         this.b2Status[i] = 'wrong';
         this.styleWrong(el);
         if (!this.errors[i]) this.errors[i] = { type:'other' };
-        // No-guess prompt (nhắc nhẹ, không phát khi đang ghi âm)
-        const now = Date.now();
-        if (!this.audioMutedDuringRec && now - this._noGuessLastTs > 2500){
-          this._noGuessLastTs = now;
-          this.showNoGuessHint();
-          try{
-            if (window.VoiceUI && VoiceUI.enabled) VoiceUI.say('Đừng đoán. Hãy phân tích âm chữ: tách âm đầu, vần và thanh.');
-          }catch(_){}
-        } else {
-          this.showNoGuessHint(); // vẫn hiển thị chữ
-        }
       }
     }
   },
 
+  // Streaming window: luôn tiến frontier về phía trước; nếu không khớp trong cửa sổ → xem là sai (substitution)
   updateLiveHighlight(){
     if (!this.readTokenElems || !this.readTokenElems.length) return;
-    const expected = this.wordSplit(this.passage.text);
-    const expN = expected.map(t=>this.normalizeText(t));
-    const recN = this.wordSplit(this.normalizeText(this.asrLiveText || this.asrText || ''));
-    const n = expN.length, m = recN.length;
-    if (!m) { this.updateSpotlight(); return; }
+    const expN = this.wordSplit(this.passage.text).map(t=> this.normalizeText(t));
+    const recNAll = this.wordSplit(this.normalizeText(this.asrLiveText || this.asrText || ''));
 
-    // DP (Levenshtein) để căn chỉnh prefix
-    const dp = Array.from({length: n+1}, (_,i)=> {
-      const row = new Array(m+1);
-      row[0] = i;
-      return row;
-    });
-    for (let j=0;j<=m;j++) dp[0][j] = j;
-    for (let i=1;i<=n;i++){
-      for (let j=1;j<=m;j++){
-        const cost = (expN[i-1] === recN[j-1]) ? 0 : 1;
-        dp[i][j] = Math.min(
-          dp[i-1][j] + 1,        // del
-          dp[i][j-1] + 1,        // ins
-          dp[i-1][j-1] + cost    // sub/match
-        );
-      }
-    }
+    // Nếu Web Speech "rút lại" interim làm ngắn chuỗi, kẹp chỉ số j để không vượt
+    if (recNAll.length < this.b2RecIdx) this.b2RecIdx = recNAll.length;
 
-    // Duyệt tiến từ (0,0) đến khi dùng hết rec (j==m)
-    let i=0, j=0;
-    const matchedIdx = new Set();
+    let i = this.b2Frontier;        // frontier expected
+    let j = this.b2RecIdx;          // điểm bắt đầu xử lý rec token
+    const n = expN.length;
+    const m = recNAll.length;
+    const win = this.b2Win || 8;
+
+    // Bỏ qua các expected đã commit (không còn 'unknown')
+    while (i<n && this.b2Status[i] !== 'unknown') i++;
+
     while (j < m && i < n){
-      const here = dp[i][j];
-      // match
-      if (expN[i] === recN[j] && dp[i+1][j+1] === here){
-        matchedIdx.add(i);
+      const tok = recNAll[j];
+
+      // Nhảy qua các expected đã commit nếu có
+      while (i<n && this.b2Status[i] !== 'unknown') i++;
+      if (i>=n) break;
+
+      if (expN[i] === tok){
+        this.setB2State(i, 'correct');
         i++; j++; continue;
       }
-      // insert (từ thừa trong nhận dạng)
-      if (dp[i][j+1] === here + 1){ j++; continue; }
-      // substitute
-      if (dp[i+1][j+1] === here + 1){ i++; j++; continue; }
-      // delete
-      if (dp[i+1][j] === here + 1){ i++; continue; }
-      // fallback
-      i++; j++;
-    }
-    const i_end = i; // số từ expected đã "đi qua" theo căn chỉnh hiện tại
 
-    // Gắn trạng thái bền: 0..i_end-1: đúng nếu match, sai nếu không match
-    for (let k=0;k<i_end;k++){
-      if (matchedIdx.has(k)) this.setB2State(k, 'correct');
-      else this.setB2State(k, 'wrong');
+      // Tìm khớp trong cửa sổ gần phía trước
+      let found = -1;
+      const end = Math.min(n-1, i+win);
+      for (let k=i+1; k<=end; k++){
+        if (this.b2Status[k] === 'unknown' && expN[k] === tok) { found = k; break; }
+      }
+
+      if (found >= 0){
+        // Các vị trí i..found-1 xem là sai
+        for (let t=i; t<found; t++){
+          if (this.b2Status[t] === 'unknown') this.setB2State(t, 'wrong');
+        }
+        this.setB2State(found, 'correct');
+        i = found + 1; j++; continue;
+      } else {
+        // Không thấy trong cửa sổ → xem như thay thế: đánh dấu vị trí hiện tại là sai rồi tiến tiếp
+        if (this.b2Status[i] === 'unknown') this.setB2State(i, 'wrong');
+        i++; j++; continue;
+      }
     }
 
-    // Cập nhật Spotlight bám theo i_end (trừ khi người dùng điều khiển tay)
-    if (this._spotIdxManual == null) this.updateSpotlight(i_end);
-    else this.updateSpotlight(this._spotIdxManual);
+    this.b2Frontier = i;
+    this.b2RecIdx = j;
   },
 
   /* ========== Đồng bộ cập nhật chỉ số tạm khi đánh dấu thủ công (nếu không có ASR) ========== */
@@ -854,7 +839,7 @@ window.ReadingModule = {
     }
 
     if (!this.started) return;
-    // Khi đang đọc: hiển thị tức thời theo số từ chưa đánh dấu (không dùng ASR realtime)
+    // Khi đang đọc: hiển thị tức thời theo số từ chưa đánh dấu (không dùng ASR realtime để tính số – chỉ hỗ trợ cảm quan)
     const dur = window.__now() - this.startTime;
     const expected = this.wordSplit(this.passage.text).length;
     const wrong = Object.keys(this.errors).length;
@@ -1057,192 +1042,5 @@ window.ReadingModule = {
     if (this.audioMutedDuringRec) return;
     this.usedTTS++;
     if (window.TTS) TTS.speak(this.passage.text || '', (window.AppState && AppState.learner && AppState.learner.ttsRate) || 0.9);
-  },
-
-  /* ========== B2 Assist Bar: Spotlight / Tricky / Echo / Pacer & No-guess hint ========== */
-  ensureB2AssistBar(){
-    const step = document.getElementById('readStep2');
-    if (!step) return;
-    if (document.getElementById('b2AssistBar')) return;
-
-    // Thanh
-    const bar = document.createElement('div');
-    bar.id = 'b2AssistBar';
-    bar.className = 'row';
-    bar.style.gap = '8px';
-    bar.style.margin = '6px 0';
-
-    const mkBtn = (label, handler, cls='ghost')=>{
-      const b = document.createElement('button');
-      b.className = cls;
-      b.textContent = label;
-      b.onclick = handler;
-      return b;
-    };
-
-    // Spotlight
-    if (this._spotOn == null) this._spotOn = !!(window.AppState && AppState.childMode);
-    const btnSpot = mkBtn(this._spotOn ? '🔦 Spotlight: Bật' : '🔦 Spotlight: Tắt', ()=>{
-      this._spotOn = !this._spotOn;
-      btnSpot.textContent = this._spotOn ? '🔦 Spotlight: Bật' : '🔦 Spotlight: Tắt';
-      this.updateSpotlight();
-    });
-
-    // Tricky words
-    const btnTricky = mkBtn('🎯 Từ khó', ()=> this.showTrickyWords());
-
-    // Echo Reading
-    const btnEcho = mkBtn(this._echoOn ? '🗣️ Echo: Bật' : '🗣️ Echo: Tắt', ()=>{
-      if (this.started){ alert('Hãy tắt ghi âm trước khi dùng Echo.'); return; }
-      this._echoOn = !this._echoOn;
-      btnEcho.textContent = this._echoOn ? '🗣️ Echo: Bật' : '🗣️ Echo: Tắt';
-      if (this._echoOn) this.startEcho(); else this.stopEcho();
-    });
-
-    // Pacer
-    const btnPacer = mkBtn(this._pacerOn ? '⏱️ Pacer: Bật' : '⏱️ Pacer: Tắt', ()=>{
-      this._pacerOn = !this._pacerOn;
-      btnPacer.textContent = this._pacerOn ? '⏱️ Pacer: Bật' : '⏱️ Pacer: Tắt';
-      this.updatePacer();
-    });
-
-    const wpmWrap = document.createElement('span');
-    wpmWrap.className='row';
-    wpmWrap.style.gap='6px';
-    const lbl = document.createElement('span'); lbl.textContent='WPM';
-    const inp = document.createElement('input');
-    inp.type='range'; inp.min='50'; inp.max='140'; inp.step='5';
-    inp.value=String(this._pacerWPM||80);
-    const spanVal = document.createElement('span'); spanVal.textContent = String(this._pacerWPM||80);
-    inp.oninput = ()=>{ this._pacerWPM = +inp.value; spanVal.textContent=String(this._pacerWPM); this.updatePacer(); };
-    wpmWrap.append(lbl, inp, spanVal);
-
-    // Hàng nhắc No-guess (ẩn mặc định)
-    if (!document.getElementById('noGuessHint')){
-      const hint = document.createElement('div');
-      hint.id='noGuessHint';
-      hint.className='help';
-      hint.style.display='none';
-      hint.style.marginTop='4px';
-      hint.textContent='Đừng đoán nhé. Hãy phân tích âm–chữ: tách âm đầu – vần – thanh.';
-      step.appendChild(hint);
-    }
-
-    // Chèn ngay dưới hàng điều khiển đầu tiên
-    const firstRow = step.querySelector('.row');
-    if (firstRow && firstRow.parentElement) firstRow.parentElement.insertBefore(bar, firstRow.nextSibling);
-    else step.insertBefore(bar, step.firstChild);
-
-    bar.append(btnSpot, btnTricky, btnEcho, btnPacer, wpmWrap);
-
-    // Phím mũi tên điều khiển Spotlight khi không có ASR
-    step.addEventListener('keydown', (e)=>{
-      if (!this._spotOn) return;
-      if (e.key==='ArrowRight' || e.key==='ArrowLeft'){
-        e.preventDefault();
-        const dir = e.key==='ArrowRight' ? 1 : -1;
-        const maxIdx = Math.max(0, this.readTokenElems.length-1);
-        this._spotIdxManual = Math.max(0, Math.min(maxIdx, (this._spotIdxManual ?? 0) + dir));
-        this.updateSpotlight(this._spotIdxManual);
-      }
-    });
-  },
-
-  updateSpotlight(forcedIdx){
-    // Làm nổi 3–5 từ quanh idx; tắt nếu _spotOn=false
-    if (!this.readTokenElems || !this.readTokenElems.length) return;
-    if (!this._spotOn){
-      for (const el of this.readTokenElems){ if (el){ el.style.filter=''; el.style.opacity=''; } }
-      return;
-    }
-    const maxIdx = this.readTokenElems.length-1;
-    // Nếu có forcedIdx → dùng; nếu không: nếu có i_end ước lượng: dùng số từ đã commit (correct/wrong); ngược lại = 0
-    let idx = typeof forcedIdx==='number' ? forcedIdx : 0;
-    if (this._spotIdxManual != null) idx = this._spotIdxManual;
-
-    if (idx<0) idx=0; if (idx>maxIdx) idx=maxIdx;
-    const w = this._spotWidth || 4;
-    for (let i=0;i<=maxIdx;i++){
-      const el = this.readTokenElems[i];
-      if (!el) continue;
-      const on = (i>=idx && i<idx+w);
-      el.style.filter = on ? '' : 'grayscale(0.3)';
-      el.style.opacity = on ? '1' : '0.35';
-    }
-  },
-
-  showTrickyWords(){
-    try{
-      const words = this.wordSplit(this.passage?.text||'').map(x=>x.trim());
-      const cards = Array.isArray(window.CARDS)? window.CARDS : [];
-      const badTags = new Set(['sx','chtr','ngngh','ckqu','nl','tone','ghg']);
-      const dict = new Map(cards.map(c=>[String(c.text||'').normalize('NFC'), c]));
-      const tricky = [];
-      for (const w of words){
-        const c = dict.get(w.normalize('NFC'));
-        if (c && (c.tags||[]).some(t=>badTags.has(t))) tricky.push({text:w, tags:c.tags});
-      }
-      const seen = new Set(); const list=[];
-      for (const t of tricky){ if (seen.has(t.text)) continue; seen.add(t.text); list.push(t); if (list.length>=8) break; }
-      if (!list.length){ alert('Bài này không có “từ khó” nổi bật.'); return; }
-
-      const wrap = document.createElement('div');
-      wrap.className='modal active'; wrap.style.background='rgba(0,0,0,.35)';
-      const dlg = document.createElement('div');
-      dlg.className='dialog';
-      dlg.innerHTML='<h3>Từ cần chú ý</h3>';
-      const ul = document.createElement('div'); ul.className='inline-buttons'; ul.style.flexWrap='wrap';
-      list.forEach(t=>{
-        const b = document.createElement('button');
-        b.textContent = '🔊 ' + t.text;
-        b.onclick = ()=> { if (window.TTS) TTS.speak(t.text, window.AppState?.learner?.ttsRate || 0.9); };
-        ul.appendChild(b);
-      });
-      const row = document.createElement('div'); row.className='row'; row.style.marginTop='8px';
-      const sp = document.createElement('div'); sp.className='spacer';
-      const close = document.createElement('button'); close.className='ghost'; close.textContent='Đã xong'; close.onclick=()=> wrap.remove();
-      row.append(sp, close);
-      dlg.append(ul, row); wrap.appendChild(dlg);
-      document.body.appendChild(wrap);
-    }catch(_){}
-  },
-
-  startEcho(){
-    if (this.started) return;
-    this._echoIdx = 0;
-    const lines = Array.from(document.querySelectorAll('#passageText .reading-line')).map(el=>el.textContent.trim()).filter(Boolean);
-    if (!lines.length){ this._echoOn=false; return; }
-    const go = ()=>{
-      if (!this._echoOn) return;
-      if (this._echoIdx >= lines.length){ this._echoOn=false; return; }
-      const line = lines[this._echoIdx];
-      if (window.TTS) TTS.speak(line, window.AppState?.learner?.ttsRate || 0.85);
-      const secs = Math.max(2.5, Math.min(6, line.split(/\s+/).length/2));
-      setTimeout(()=>{ if (!this._echoOn) return; this._echoIdx++; go(); }, secs*1000);
-    };
-    go();
-  },
-  stopEcho(){ this._echoOn=false; },
-
-  updatePacer(){
-    if (this._pacerTid){ clearInterval(this._pacerTid); this._pacerTid=null; }
-    if (!this._pacerOn) return;
-    const wpm = this._pacerWPM || 80;
-    const msPerWord = Math.max(250, Math.round(60000/Math.max(30, Math.min(180, wpm))));
-    if (this._spotIdxManual==null) this._spotIdxManual = 0;
-    this._pacerTid = setInterval(()=>{
-      if (!this._spotOn || !this.readTokenElems?.length){ clearInterval(this._pacerTid); this._pacerTid=null; return; }
-      const maxIdx = this.readTokenElems.length-1;
-      this._spotIdxManual = Math.min(maxIdx, (this._spotIdxManual ?? 0) + 1);
-      this.updateSpotlight(this._spotIdxManual);
-    }, msPerWord);
-  },
-
-  showNoGuessHint(){
-    const hint = document.getElementById('noGuessHint');
-    if (!hint) return;
-    hint.style.display='block';
-    clearTimeout(hint._tid);
-    hint._tid = setTimeout(()=>{ hint.style.display='none'; }, 2200);
   }
 };

@@ -176,13 +176,13 @@
     <div class="hero home">
       <div class="hero-content">
         <h3 class="hero-title hero-title-fancy">Chào mừng tới Đọc Dễ</h3>
-        <p class="hero-sub">Ứng dụng Structured Literacy: luyện âm–chữ, đọc trôi chảy, hiểu nội dung – thân thiện cho trẻ khó đọc.</p>
+        <p class="hero-sub"> luyện âm–chữ, đọc trôi chảy, hiểu nội dung, trò chơi – thân thiện cho trẻ khó đọc.</p>
 
         <div class="hero-badges">
-          <span class="pill soft">Structured Literacy</span>
-          <span class="pill soft">Voice UI</span>
-          <span class="pill soft">TTS & Ghi âm</span>
-          <span class="pill soft">Offline-first</span>
+          <span class="pill soft">Học tập có cấu trúc</span>
+          <span class="pill soft">Giao diện người dùng có giọng nói</span>
+          <span class="pill soft">Chuyển văn bản thành lời nói và  Ghi âm</span>
+          <span class="pill soft">Có thể hoạt động không cần kết nối mạng</span>
         </div>
       </div>
 
@@ -211,7 +211,7 @@
     <!-- Quick actions -->
     <div class="home-quick">
       <button class="quick ghost" onclick="App.nav('assess'); AssessModule.init()" data-voice="Đánh giá nhanh">🧪 Đánh giá</button>
-      <button class="quick ghost" onclick="App.nav('pa')" data-voice="Luyện âm vị">🎯 Âm vị</button>
+      <button class="quick ghost" onclick="App.nav('pa')" data-voice="Luyện âm vị">🎯 Luyện âm vị</button>
       <button class="quick ghost" onclick="App.nav('cards')" data-voice="Thẻ từ">🃏 Thẻ từ</button>
       <button class="quick ghost" onclick="App.nav('reading')" data-voice="Luyện đọc">📖 Luyện đọc</button>
       <button class="quick ghost" onclick="App.nav('game')" data-voice="Trò chơi">🎮 Trò chơi</button>
@@ -490,7 +490,7 @@
     <div class="row">
       <button onclick="App.nav('home')" data-voice="Về trang chính">← Về trang chính</button>
       <div class="spacer"></div>
-      <span class="badge">Luyện đọc (4 bước)</span>
+      <span class="badge">Luyện đọc (5 bước)</span>
     </div>
 
     <div class="section lift">
@@ -499,6 +499,7 @@
         <div class="step" data-step="2"><span>2</span> Đọc</div>
         <div class="step" data-step="3"><span>3</span> Đánh dấu</div>
         <div class="step" data-step="4"><span>4</span> Câu hỏi</div>
+        <div class="step" data-step="5"><span>5</span> Kết quả</div>
       </div>
     </div>
 
@@ -863,9 +864,9 @@
         <div class="help-step">
           <div class="help-icon" aria-hidden="true">📖</div>
           <div class="help-body">
-            <b>3) Luyện đọc (4 bước)</b>
+            <b>3) Luyện đọc (5 bước)</b>
             <ul>
-              <li>B1 Chọn • B2 Đọc • B3 Đánh dấu • B4 Câu hỏi/Kết quả.</li>
+              <li>B1 Chọn • B2 Đọc • B3 Đánh dấu • B4 Câu hỏi • B5 Kết quả.</li>
               <li>Gợi ý: bật “🔎 Con trỏ” để tập trung theo dòng.</li>
             </ul>
           </div>
@@ -980,6 +981,7 @@
 <script src="./app/app.js" defer></script>
 <script src="./app/xplat_patch.js" defer></script>
 <script src="./app/criteria_enforce.js" defer></script>
+<script src="./app/i18n.js" defer></script>
 
 <!-- Vá: Chỉ nói 1 lần/ thao tác + Tự ẩn thanh đáy + Thu gọn/hiện appbar & a11ybar -->
 <script>
